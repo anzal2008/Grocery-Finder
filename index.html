@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vancouver Grocery Finder</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <h1>Vancouver Grocery Finder</h1>
+    <p>Enter your postal code to get started.</p>
+
+    <form id="search-form">
+      <label for="postal-code">Postal code</label>
+      <input id="postal-code" name="postal-code" type="text"
+             placeholder="V5K 0A1" autocomplete="postal-code"
+             aria-describedby="error" required>
+      <p id="error" role="alert"></p>
+      <button type="submit">Find a recipe</button>
+    </form>
+
+    <section id="results" aria-labelledby="recipe-heading" hidden>
+      <h2 id="recipe-heading" tabindex="-1">Recipe coming soon</h2>
+      <p>Postal code entered: <strong id="display-postal-code"></strong></p>
+      <a id="map-link" target="_blank" rel="noopener noreferrer">
+        Open in Google Maps (new tab)
+      </a>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
