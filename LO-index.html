@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<!-- ============================================================
+  LO-index.html — Grocery Finder entry page (LO = Louis, Firebase sign-in)
+  Mixed file: original store-search site + the L-labeled account kit
+  (sign-in drawer, list, alerts, AI recipes, pantry photo, meal plan,
+  trip history, store comparison, cloud sync).
+  Sign-in + saved data: LO-auth.js (Firebase). Config: LO-firebase-config.js.
+============================================================ -->
+<html lang="en-CA">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Grocery Finder</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Young+Serif&display=swap">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="LO-style.css">
+  <link rel="stylesheet" href="LO-account.css">
+</head>
+<body>
+  <header class="topbar">
+    <span class="wordmark"><span class="stamp" aria-hidden="true">GF</span>Grocery Finder</span>
+    <span class="topbar-actions">
+      <button type="button" id="account-open-btn" class="theme-btn" aria-haspopup="dialog">Sign in</button>
+      <button type="button" id="theme-btn" class="theme-btn" aria-label="Switch colour theme">Dark</button>
+    </span>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div>
+        <p class="kicker">Canada &middot; 9 chains &middot; free</p>
+        <h1>Where's the nearest grocery store?</h1>
+        <p class="lead">Type a postal code or an address. We list the closest stores, nearest first, and pin them on the map.</p>
+      </div>
+      <ul class="chain-tags" aria-label="Chains we look for">
+        <li>No Frills</li><li>Superstore</li><li>Sobeys</li><li>Walmart</li><li>T&amp;T</li><li>IGA</li><li>Independent</li><li>Save-On-Foods</li><li>Safeway</li>
+      </ul>
+    </section>
+
+    <form id="search-form" class="tag-card" novalidate>
+      <span class="punch" aria-hidden="true"></span>
+
+      <div class="mode" role="radiogroup" aria-label="Search by">
+        <label><input type="radio" name="mode" value="postal" checked><span>Postal code</span></label>
+        <label><input type="radio" name="mode" value="address"><span>Address</span></label>
+      </div>
+
+      <div class="search-row">
+        <label for="place" class="visually-hidden" id="place-label">Postal code</label>
+        <input id="place" type="text" placeholder="V6K 1P2" autocomplete="postal-code" spellcheck="false">
+        <button type="submit" id="search-btn">Find stores</button>
+      </div>
+
+      <div class="tag-bottom">
+        <fieldset class="radius">
+          <legend>Within</legend>
+          <div class="segments">
+            <label><input type="radio" name="radius" value="2"><span>2 km</span></label>
+            <label><input type="radio" name="radius" value="5" checked><span>5 km</span></label>
+            <label><input type="radio" name="radius" value="10"><span>10 km</span></label>
+            <label><input type="radio" name="radius" value="25"><span>25 km</span></label>
+          </div>
+        </fieldset>
+        <button type="button" id="locate-btn" class="link-btn">Use my current location</button>
+      </div>
+
+      <div id="progress" class="progress" hidden>
+        <div class="progress-top">
+          <span id="progress-label">Starting...</span>
+          <span id="progress-pct" class="progress-pct">0%</span>
+        </div>
+        <div class="progress-track"><div id="progress-fill" class="progress-fill"></div></div>
+      </div>
+      <p id="error" class="error" role="alert"></p>
+    </form>
+
+    <section id="results" class="results" hidden>
+      <div class="receipt-wrap">
+        <div class="receipt">
+          <p class="receipt-top">GROCERY FINDER</p>
+          <p id="receipt-date" class="receipt-meta"></p>
+          <h2 id="results-heading" tabindex="-1">Stores</h2>
+          <p id="searched-for" class="receipt-meta"></p>
+          <hr>
+          <ol id="store-list" class="store-list"></ol>
+          <hr>
+          <dl class="totals">
+            <div><dt>Stores</dt><dd id="total-count">0</dd></div>
+            <div><dt>Nearest</dt><dd id="total-nearest">-</dd></div>
+          </dl>
+          <p class="receipt-thanks">Tap a store to see it on the map</p>
+        </div>
+      </div>
+      <div class="results-map">
+        <div id="map" class="map" aria-label="Map of nearby stores"></div>
+        <p id="map-fallback" class="muted" hidden>The map couldn't load. Check your internet connection.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    Store locations from OpenStreetMap. A store can be missing if nobody has mapped it yet.
+  </footer>
+
+  <aside id="account-drawer" hidden role="dialog" aria-label="Your account">
+    <div class="drawer-head">
+      <span class="drawer-title">Your account</span>
+      <button type="button" id="drawer-close-btn" class="theme-btn" aria-label="Close">Close</button>
+    </div>
+
+    <div id="user-box">
+      <div id="user-when-out">
+        <p id="signin-note" class="drawer-note">Make a free account to keep your stores, list, recipes and alerts on every device.</p>
+        <button type="button" id="lo-google-btn" class="ghost-btn wide">Continue with Google</button>
+        <p class="lo-or">or use email</p>
+        <input id="lo-name" type="text" autocomplete="name" placeholder="Your name (for sign up)">
+        <input id="lo-email" type="email" autocomplete="email" placeholder="Email">
+        <input id="lo-password" type="password" autocomplete="current-password" placeholder="Password (6+ characters)">
+        <div class="row">
+          <button type="button" id="lo-login-btn" class="accent-btn">Log in</button>
+          <button type="button" id="lo-signup-btn" class="ghost-btn">Sign up</button>
+        </div>
+        <button type="button" id="lo-reset-btn" class="link-btn lo-reset">Forgot password?</button>
+        <p id="lo-auth-msg" class="drawer-note" role="status" hidden></p>
+      </div>
+      <div id="user-when-in" hidden>
+        <p id="user-chip" class="user-chip"></p>
+        <div class="row">
+          <button type="button" id="auth-signout-btn" class="ghost-btn">Log out</button>
+          <button type="button" id="demo-data-btn" class="ghost-btn">Load sample data</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="cloud-box">
+      <p id="cloud-status" class="drawer-note">Saved in this browser only.</p>
+    </div>
+
+    <nav class="drawer-tabs" aria-label="Account sections">
+      <button type="button" class="drawer-tab active" data-tab="stores">Stores</button>
+      <button type="button" class="drawer-tab" data-tab="list">List</button>
+      <button type="button" class="drawer-tab" data-tab="week">Week</button>
+      <button type="button" class="drawer-tab" data-tab="alerts">Alerts <span id="alert-badge" class="badge" hidden>0</span></button>
+      <button type="button" class="drawer-tab" data-tab="extras">Recipes</button>
+    </nav>
+
+    <section id="panel-stores" class="drawer-panel active">
+      <button type="button" id="save-stores-btn" class="accent-btn wide">☆ Save these search results</button>
+      <button type="button" id="search-my-area-btn" class="ghost-btn wide" hidden></button>
+      <ul id="my-stores-list" class="drawer-list"></ul>
+    </section>
+
+    <section id="panel-list" class="drawer-panel">
+      <div class="row">
+        <input id="list-input" type="text" list="ingredients-datalist" placeholder="Add an ingredient, e.g. butter" autocomplete="off">
+        <button type="button" id="add-item-btn" class="accent-btn">Add</button>
+      </div>
+      <datalist id="ingredients-datalist"></datalist>
+      <ul id="shopping-list" class="drawer-list"></ul>
+      <p id="list-total" class="drawer-total"></p>
+      <p id="budget-line" class="drawer-total" hidden></p>
+      <p id="basket-compare" class="drawer-total" hidden></p>
+      <button type="button" id="finish-trip-btn" class="ghost-btn wide">✅ Finish trip — archive the checked items</button>
+      <p class="drawer-note">Check items off as you shop, then Finish trip: they're archived with the total (see the Week tab) and removed from the list. Tap 🧺 on an item you already have — it leaves the total but stays on the list.</p>
+    </section>
+
+    <section id="panel-week" class="drawer-panel">
+      <p id="week-stats" class="drawer-note">No trips yet — finish a shopping trip from the List tab.</p>
+      <h4 class="sec-title">Meal plan</h4>
+      <p class="drawer-note">Pick a saved recipe for each day, then add the whole week's ingredients to your list in one tap.</p>
+      <div id="plan-list" class="plan-list"></div>
+      <button type="button" id="add-week-btn" class="accent-btn wide">Add whole week to list</button>
+      <h4 class="sec-title">Recent trips</h4>
+      <ul id="trips-list" class="drawer-list"></ul>
+    </section>
+
+    <section id="panel-alerts" class="drawer-panel">
+      <div class="row">
+        <select id="alert-category" aria-label="What to watch"></select>
+        <button type="button" id="add-alert-btn" class="accent-btn">Watch</button>
+      </div>
+      <p class="drawer-note">Watch a category (Superstore prices). Whenever the cheapest unit price drops below the last price you saw, it shows up in the feed below with a badge on the Alerts tab.</p>
+      <ul id="alerts-list" class="drawer-list"></ul>
+      <h3 class="feed-title">Price drops</h3>
+      <ul id="alerts-feed" class="drawer-list"></ul>
+    </section>
+
+    <section id="panel-extras" class="drawer-panel">
+      <h4 class="sec-title">✨ AI chef</h4>
+      <input id="ai-key" type="password" placeholder="Gemini API key (saved on this device)">
+      <textarea id="ai-desc" rows="2" placeholder="Describe a recipe — e.g. easy pancakes, no milk"></textarea>
+      <button type="button" id="ai-generate-btn" class="accent-btn wide">Make the recipe</button>
+      <div class="row">
+        <button type="button" id="ai-cheap-btn" class="ghost-btn">Cook something cheap ✨</button>
+        <button type="button" id="pantry-cook-btn" class="ghost-btn">Cook from my 🧺 pantry</button>
+      </div>
+      <button type="button" id="pantry-photo-btn" class="ghost-btn wide">📸 Photo my fridge or pantry — AI finds the ingredients</button>
+      <input id="pantry-photo-input" type="file" accept="image/*" hidden>
+      <p class="drawer-note">Free key: <strong>aistudio.google.com/apikey</strong> → Create API key. Paste it once — it stays on this device. “Cook something cheap” uses the week's cheapest items; “Cook from my pantry” uses what's marked 🧺 on the List tab (or whatever the photo finds — it auto-adds them).</p>
+      <div id="ai-result" class="ai-result" hidden>
+        <p class="ai-name"><strong id="ai-name"></strong></p>
+        <p class="dim">Ingredients</p>
+        <ul id="ai-ingredients" class="drawer-list"></ul>
+        <p class="dim">Steps</p>
+        <ol id="ai-steps" class="ai-steps"></ol>
+        <div class="row">
+          <button type="button" id="ai-add-btn" class="ghost-btn">Add to list</button>
+          <button type="button" id="ai-save-btn" class="accent-btn">Save recipe</button>
+        </div>
+      </div>
+
+      <h4 class="sec-title">Saved recipes</h4>
+      <div class="row">
+        <input id="recipe-name" type="text" placeholder="Recipe name (manual save)">
+        <button type="button" id="add-recipe-btn" class="accent-btn">Save</button>
+      </div>
+      <input id="recipe-ingredients" type="text" placeholder="Ingredients, comma separated: flour, milk, eggs">
+      <ul id="recipes-list" class="drawer-list"></ul>
+
+      <h4 class="sec-title">Weekly budget (optional)</h4>
+      <div class="row">
+        <input id="budget-input" type="number" min="0" step="1" placeholder="$ per week">
+        <button type="button" id="set-budget-btn" class="accent-btn">Set</button>
+      </div>
+      <p class="drawer-note">Set an amount and the List panel shows what's left of it live. The Week tab tracks your streak of trips under budget. Leave empty and press Set to turn it off.</p>
+
+      <h4 class="sec-title">Move to another device (no cloud needed)</h4>
+      <p class="drawer-note">Copy your saved stores, list, recipes and watches into a code, then load it on your other device.</p>
+      <button type="button" id="copy-sync-btn" class="ghost-btn wide">Copy sync code from this device</button>
+      <div class="row">
+        <input id="sync-input" type="text" placeholder="Paste a sync code here">
+        <button type="button" id="paste-sync-btn" class="accent-btn">Load</button>
+      </div>
+    </section>
+  </aside>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="LO-stores.js"></script>
+  <script src="LO-app.js"></script>
+  <script src="LO-ingredients.js"></script>
+  <script src="data/LO-prices-data.js"></script>
+  <script src="LO-firebase-config.js"></script>
+  <script type="module" src="LO-auth.js"></script>
+  <script src="LO-account.js"></script>
+</body>
+</html>
