@@ -6,6 +6,7 @@ Endpoints:
   /api/health                -> liveness probe
 """
 
+import hashlib
 import json
 import math
 import random
@@ -777,6 +778,12 @@ def recipes():
     diets = [d for d in (request.args.get("diet") or "").split(",")
              if d in ("vegetarian", "vegan", "gluten_free", "dairy_free")]
     try:
+        # Stable picks: the same search (same chains + diets) returns the SAME
+        # recipes for an hour, so bumping the servings stepper visibly scales
+        # each card's cost instead of reshuffling the whole list with a new
+        # random pick from the cheap band. A new hour rotates for variety.
+        seed_src = "|".join(list(chains) + list(diets)) + "|" + str(int(time.time() // 3600))
+        random.seed(int(hashlib.md5(seed_src.encode("utf-8")).hexdigest()[:12], 16))
         result = gb.cheapest_recipes(chains, count=10, servings=servings)
     except Exception as exc:
         return jsonify(error="Recipe lookup failed: " + str(exc)), 500
