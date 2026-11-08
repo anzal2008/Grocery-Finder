@@ -9,8 +9,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<link rel="stylesheet" href="/static/forkcast.css">
-<link rel="stylesheet" href="/static/L-account.css">
+<link rel="stylesheet" href="/static/forkcast.css?v=7">
+<link rel="stylesheet" href="/static/L-account.css?v=7">
 </head>
 <body>
 <a class="skip-link" href="#postal">Skip to search</a>
@@ -125,7 +125,25 @@
               <button type="button" id="servings-plus" class="stepper-btn" aria-label="One more serving">+</button>
               <input type="range" id="servings" name="servings" min="1" max="12" step="1" value="1" aria-label="Number of servings" hidden>
             </div>
-            <button type="button" id="filters-btn" class="pill-btn" aria-expanded="false">Diet &amp; price filters</button>
+            <div class="filters-wrap">
+              <button type="button" id="filters-btn" class="pill-btn" aria-expanded="false" aria-haspopup="true">Diet &amp; price filters</button>
+              <div id="filters-pop" class="filters-pop" hidden>
+                <div class="pop-group">
+                  <span class="pop-title">Dietary needs</span>
+                  <label class="pop-check"><input type="checkbox" id="pop-diet-vegetarian"><span>Vegetarian</span></label>
+                  <label class="pop-check"><input type="checkbox" id="pop-diet-vegan"><span>Vegan</span></label>
+                  <label class="pop-check"><input type="checkbox" id="pop-diet-gluten"><span>Gluten-free</span></label>
+                  <label class="pop-check"><input type="checkbox" id="pop-diet-dairy"><span>Dairy-free</span></label>
+                </div>
+                <div class="pop-group">
+                  <span class="pop-title">Max price per meal</span>
+                  <div class="serving-slider">
+                    <input type="range" id="pop-max-price" min="1" max="100" step="0.5" value="100" aria-label="Maximum dollars per meal">
+                    <output id="pop-max-price-value" class="servings-value" for="pop-max-price">Any</output>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
           <div id="recipes-list" class="recipes-list" aria-live="polite"></div>
         </section>
@@ -283,8 +301,8 @@
 </aside>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="/static/app.js"></script>
-<script src="/static/L-ingredients.js"></script>
-<script src="/static/L-account.js"></script>
+<script src="/static/app.js?v=7"></script>
+<script src="/static/L-ingredients.js?v=7"></script>
+<script src="/static/L-account.js?v=7"></script>
 </body>
 </html>

@@ -92,7 +92,9 @@ body {
 }
 .skip-link:focus { top: 0; }
 
-main { max-width: 1180px; margin: 0 auto; padding: 20px 28px 72px; }
+main { max-width: 1600px; margin: 0 auto; padding: 20px 28px 72px; }
+/* 1600px (was 1180): the 8-column ingredient table was squeezed into heavy
+   wrapping while wide screens had large empty margins on both sides. */
 
 /* ---------- Top bar ---------- */
 .topbar {
@@ -747,6 +749,45 @@ main { max-width: 1180px; margin: 0 auto; padding: 20px 28px 72px; }
 .ing-table td:last-child, .ing-table th:last-child { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 .instructions { margin: 0; padding-top: 4px; font-size: 0.92rem; line-height: 1.7; color: var(--text); }
+
+/* Ingredient table must never push past the card or the page: recipe cards
+   are flex items (min-width: auto by default) so allow them to shrink, let
+   long product names wrap inside cells, and scroll horizontally as backstop. */
+.ing-details { max-width: 100%; overflow-x: auto; }
+.recipes-list > * { min-width: 0; }
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }
+.ing-table th, .ing-table td { word-break: break-word; }
+
+/* Step-by-step instructions list */
+.instructions ol.steps { margin: 0; padding-left: 22px; display: grid; gap: 10px; }
+.instructions ol.steps li { line-height: 1.55; }
+.instructions p { margin: 0; white-space: pre-wrap; }
+
+/* Diet & price filters dropdown (opens from the pill button) */
+.filters-wrap { position: relative; }
+.filters-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.14);
+  padding: 14px 16px;
+  min-width: 250px;
+  display: grid;
+  gap: 14px;
+}
+.pop-group { display: grid; gap: 6px; }
+.pop-title {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  font-weight: 600;
+}
+.pop-check { display: flex; align-items: center; gap: 8px; font-size: 0.92rem; cursor: pointer; }
 
 /* actions row: chat / photo / source */
 .card-actions {

@@ -410,6 +410,8 @@ _JUNK_PRODUCT_WORDS = (
     "soap", "lotion", "detergent", "candle", "bun", "croissant", "brownie", "scone",
     "snack", "graham", "pudding", "truffle", "toffee", "fudge",
     "tuna", "sardine", "mackerel", "herring", "kipper",
+    "mussels", "clams", "oysters", "scallops", "squid", "octopus",
+    "noodle", "noodles", "soup mix", "dip mix", "sauce mix",
 )
 
 
@@ -418,10 +420,34 @@ def _prefer_real_products(rows, ingredient_name):
 
     def junk(r):
         name = (r.get("name") or "").lower()
+        # prepared food PACKAGED IN the ingredient ("Mussels In Sunflower Oil"
+        # keyed under sunflower oil, tuna in olive oil under olive oil)
+        if ing and (" in " + ing) in name:
+            return True
         return any(w in name and w not in ing for w in _JUNK_PRODUCT_WORDS)
 
     good = [r for r in rows if not junk(r)]
     return good if good else rows
+
+
+# Multi-pack bulk listings ("Parsley Flakes 8g (Pack of 6)", "Garlic 5 Pack")
+# matched as single products and matched badly: the card showed a $29.99
+# six-pack for a handful of parsley. Prefer normal single packs whenever
+# one exists; only fall back to multi-packs when nothing else is stocked.
+# Plain counts ("6 Count" egg carton) are standard packages, not multi-packs.
+_MULTIPACK_RE = re.compile(r"(?:pack of (\d+)|(\d+)\s*[-\s]?packs?\b|\bx\s*(\d+)\b)", re.I)
+
+
+def _prefer_single_packs(rows):
+    def multipack(r):
+        m = _MULTIPACK_RE.search(str(r.get("name") or ""))
+        if not m:
+            return False
+        n = int(m.group(1) or m.group(2) or m.group(3) or "1")
+        return n > 1
+
+    singles = [r for r in rows if not multipack(r)]
+    return singles if singles else rows
 
 
 def _best_package(rows):
@@ -441,7 +467,7 @@ def _drop_poisoned(cands):
     return cands
 
 
-def _best_unit(rows, unit_kind):
+def _best_unit(rows, unit_kind, amount=None):
     # cheapest unit-price row for the parsed unit kind -> (row, approximate)
     priced = [r for r in rows if r.get("unitPriceCad") is not None]
     if not priced:
@@ -451,6 +477,18 @@ def _best_unit(rows, unit_kind):
         return (r.get("unitPriceBasis") or "").strip()
 
     def cheapest(rs):
+        # When we know how much the recipe needs, prefer a package that
+        # actually contains that much (a 40 g spice tin for 1 tsp, not a
+        # bulk tub), then take the cheapest of those on a per-unit basis.
+        if amount is not None and amount > 0:
+            same_family = [r for r in rs
+                           if (basis_of(r) == "per g" and unit_kind == "g")
+                           or (basis_of(r) == "per mL" and unit_kind == "mL")
+                           or (basis_of(r) == "per item" and unit_kind == "item")]
+            covering = [r for r in same_family
+                        if (r.get("packageQuantity") or 0) >= amount]
+            if covering:
+                rs = covering
         return min(rs, key=lambda r: r["unitPriceCad"])
 
     if unit_kind == "mL":
@@ -538,6 +576,7 @@ def _cost_recipe(recipe, combined_index, primary, servings_map=None, servings=1)
 
         _, rows = lookup_prices(combined_index, raw_name)
         rows = _prefer_real_products(rows, raw_name)
+        rows = _prefer_single_packs(rows)
         amount, unit_kind = parse_measure(measure, raw_name)
         if amount is not None:
             # scale to requested servings on a per-serving basis
@@ -564,7 +603,7 @@ def _cost_recipe(recipe, combined_index, primary, servings_map=None, servings=1)
             unit_pool = rows
 
         pkg_row = _best_package(pkg_pool)
-        unit_row, approx_unit = _best_unit(unit_pool, unit_kind)
+        unit_row, approx_unit = _best_unit(unit_pool, unit_kind, amount)
         meal_cost = _unit_cost(unit_kind, amount, unit_row, item_grams) if unit_row else None
         approximate = approx_unit or unit_kind in ("unknown", "item") or not measure
 

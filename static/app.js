@@ -871,9 +871,12 @@ el("postal-form").addEventListener("submit", async (e) => {
   if (!s) return;
   const sync = () => {
     const v = parseFloat(s.value);
-    if (label) {
-      label.textContent = v >= 100 ? "Any" : "$" + v.toFixed(2).replace(/\.00$/, "");
-    }
+    const text = v >= 100 ? "Any" : "$" + v.toFixed(2).replace(/\.00$/, "");
+    if (label) label.textContent = text;
+    const popS = el("pop-max-price");
+    const popV = el("pop-max-price-value");
+    if (popS && document.activeElement !== popS) popS.value = s.value;
+    if (popV) popV.textContent = text;
   };
   sync();
   s.addEventListener("input", () => {
@@ -881,6 +884,18 @@ el("postal-form").addEventListener("submit", async (e) => {
     if (lastRecipes) renderRecipesFromCache();
   });
 })();
+
+function syncDietBoxes() {
+  // keep the advanced panel and the filters dropdown showing the same state
+  [["diet-vegetarian", "vegetarian"], ["diet-vegan", "vegan"],
+   ["diet-gluten", "gluten_free"], ["diet-dairy", "dairy_free"],
+   ["pop-diet-vegetarian", "vegetarian"], ["pop-diet-vegan", "vegan"],
+   ["pop-diet-gluten", "gluten_free"], ["pop-diet-dairy", "dairy_free"]]
+    .forEach(([id, key]) => {
+      const b = el(id);
+      if (b) b.checked = advanced.diets.indexOf(key) !== -1;
+    });
+}
 
 (function initAdvancedPage() {
   const btn = el("advanced-btn");
@@ -908,6 +923,9 @@ el("postal-form").addEventListener("submit", async (e) => {
     servingsInput.addEventListener("change", () => {
       advanced.servings = servingsInput.value.trim();
       saveAdvanced();
+      if (lastChains.length) {
+        renderRecipes(lastChains, getServings()).catch(() => {});
+      }
     });
   }
   if (radius) {
@@ -937,6 +955,11 @@ el("postal-form").addEventListener("submit", async (e) => {
       if (box.checked && idx === -1) advanced.diets.push(key);
       if (!box.checked && idx !== -1) advanced.diets.splice(idx, 1);
       saveAdvanced();
+      syncDietBoxes();
+      // apply the dietary filters right away when results are on screen
+      if (lastChains.length) {
+        renderRecipes(lastChains, getServings()).catch(() => {});
+      }
     });
   });
   const openAdvanced = (open) => {
@@ -949,9 +972,53 @@ el("postal-form").addEventListener("submit", async (e) => {
   };
   btn.addEventListener("click", () =>
     openAdvanced(!document.body.classList.contains("adv-open")));
+  // "Diet & price filters" opens a compact dropdown, not the full panel
   const filterBtn = el("filters-btn");
-  if (filterBtn) filterBtn.addEventListener("click", () =>
-    openAdvanced(!document.body.classList.contains("adv-open")));
+  const filterPop = el("filters-pop");
+  if (filterBtn && filterPop) {
+    const setPop = (open) => {
+      filterPop.hidden = !open;
+      filterBtn.setAttribute("aria-expanded", String(open));
+    };
+    filterBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      setPop(filterPop.hidden);
+    });
+    document.addEventListener("click", (e) => {
+      if (!filterPop.hidden && !filterPop.contains(e.target) && !filterBtn.contains(e.target)) setPop(false);
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !filterPop.hidden) setPop(false);
+    });
+    [["pop-diet-vegetarian", "vegetarian"], ["pop-diet-vegan", "vegan"],
+     ["pop-diet-gluten", "gluten_free"], ["pop-diet-dairy", "dairy_free"]].forEach(([id, key]) => {
+      const box = el(id);
+      if (!box) return;
+      box.checked = advanced.diets.indexOf(key) !== -1;
+      box.addEventListener("change", () => {
+        const idx = advanced.diets.indexOf(key);
+        if (box.checked && idx === -1) advanced.diets.push(key);
+        if (!box.checked && idx !== -1) advanced.diets.splice(idx, 1);
+        saveAdvanced();
+        syncDietBoxes();
+        if (lastChains.length) {
+          renderRecipes(lastChains, getServings()).catch(() => {});
+        }
+      });
+    });
+    const popPrice = el("pop-max-price");
+    const popPriceVal = el("pop-max-price-value");
+    const mp = el("max-price");
+    if (popPrice && mp) {
+      popPrice.value = mp.value;
+      if (popPriceVal) popPriceVal.textContent = parseFloat(mp.value) >= 100
+        ? "Any" : "$" + parseFloat(mp.value).toFixed(2).replace(/\.00$/, "");
+      popPrice.addEventListener("input", () => {
+        mp.value = popPrice.value;
+        mp.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    }
+  }
   const back = el("adv-back");
   if (back) back.addEventListener("click", () => {
     saveAdvanced(); // every control already saves on change; this confirms it
@@ -1011,8 +1078,91 @@ el("use-location").addEventListener("click", () => {
   );
 });
 
+// ---- Rigorous instruction step parsing ---------------------------------
+// A step marker is: optional "Step", a 1-2 digit number, one or more of
+// . ) ] : punctuation, then something that is NOT a digit - so "1.5 cups"
+// and "Preheat to 350. " never count as markers. Markers only define steps
+// when their numbers climb 1,2,3... from the start; any other numbering is
+// prose, not steps.
+const _STEP_LINE = /^(?:step\s+)?(\d{1,2})\s*[.)\]:]+\s*(?!\d)/i;
+const _STEP_MID = /(?:^|\s)(?:step\s+)?(\d{1,2})\s*[.)\]:]+\s*(?!\d)/gi;
+
+function _packedSplit(one) {
+  // one line packing several numbered steps -> array of steps, or null
+  const cands = [];
+  let mm;
+  _STEP_MID.lastIndex = 0;
+  while ((mm = _STEP_MID.exec(one)) !== null) {
+    cands.push({ i: mm.index, end: mm.lastIndex, num: parseInt(mm[1], 10) });
+  }
+  const seq = [];
+  let want = 1;
+  cands.forEach((c) => {
+    if (c.num === want) { seq.push(c); want++; }
+  });
+  if (seq.length < 2) return null;
+  const steps = [];
+  const pre = one.slice(0, seq[0].i).trim();
+  if (pre) steps.push(pre);
+  seq.forEach((c, k) => {
+    const to = (k + 1 < seq.length) ? seq[k + 1].i : one.length;
+    steps.push(one.slice(c.end, to).trim());
+  });
+  return steps.filter(Boolean);
+}
+
+function _stripMarker(s) {
+  // the <ol> numbers steps itself: strip leading markers (repeatedly - some
+  // sources double them up), stray bullets, and a bare "Steps:" header line.
+  let out = String(s);
+  const re = /^\s*(?:step\s+\d{1,2}\s*[.)\]:]+\s*|\d{1,2}\s*[.)\]:]+\s*|[-\u2022\u00b7]\s*)/i;
+  while (re.test(out)) {
+    out = out.replace(re, "");
+  }
+  return out.trim();
+}
+
+function splitSteps(text) {
+  const txt = String(text || "").replace(/\r/g, "\n").trim();
+  if (!txt) return [];
+  let lines = txt.split(/\n+/).map((s) => s.trim()).filter(Boolean);
+  lines = lines.filter((l) => !/^steps?\s*:?\s*$/i.test(l));
+  if (lines.length < 2) {
+    // single blob: break it on strict numbered markers if any
+    const packed = _packedSplit(lines[0] || "");
+    return (packed || lines).map(_stripMarker).filter(Boolean);
+  }
+  // multi-line: lines starting with markers that climb 1,2,3... are steps
+  const marks = lines.map((l) => l.match(_STEP_LINE));
+  const markedIdx = [];
+  marks.forEach((m, i) => { if (m) markedIdx.push(i); });
+  if (markedIdx.length >= 2 && markedIdx[0] <= 1) {
+    let want = 1;
+    let ok = true;
+    marks.forEach((m) => {
+      if (m && ok) {
+        if (parseInt(m[1], 10) !== want) ok = false;
+        want++;
+      }
+    });
+    if (ok) {
+      return lines.map((l, i) => (marks[i] ? l.slice(marks[i][0].length) : l))
+        .map(_stripMarker).filter(Boolean);
+    }
+  }
+  // otherwise: some lines may still pack multiple steps - split each line
+  const out = [];
+  lines.forEach((l) => {
+    const packed = _packedSplit(l);
+    out.push(...(packed || [l]));
+  });
+  return out.map(_stripMarker).filter(Boolean);
+}
+
 function addInstructions(card, r) {
   if (!r.instructions) return;
+  const steps = splitSteps(r.instructions);
+  if (!steps.length) return;
   const inst = document.createElement("details");
   inst.className = "inst-details";
   const isum = document.createElement("summary");
@@ -1020,7 +1170,20 @@ function addInstructions(card, r) {
   inst.appendChild(isum);
   const body = document.createElement("div");
   body.className = "instructions";
-  body.textContent = r.instructions;
+  if (steps.length > 1) {
+    const ol = document.createElement("ol");
+    ol.className = "steps";
+    steps.forEach((s) => {
+      const li = document.createElement("li");
+      li.textContent = s;
+      ol.appendChild(li);
+    });
+    body.appendChild(ol);
+  } else {
+    const p = document.createElement("p");
+    p.textContent = steps[0];
+    body.appendChild(p);
+  }
   inst.appendChild(body);
   card.appendChild(inst);
 }
@@ -1037,6 +1200,8 @@ function addSourceLink(parent, r) {
 }
 
 function buildIngTable(r) {
+  const scroll = document.createElement("div");
+  scroll.className = "table-scroll";
   const table = document.createElement("table");
   table.className = "ing-table";
   const thead = document.createElement("thead");
@@ -1054,7 +1219,8 @@ function buildIngTable(r) {
   const tbody = document.createElement("tbody");
   r.items.forEach((it) => tbody.appendChild(itemRow(it)));
   table.appendChild(tbody);
-  return table;
+  scroll.appendChild(table);
+  return scroll;
 }
 
 function td(text, cls) {

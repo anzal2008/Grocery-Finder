@@ -458,7 +458,18 @@ summary::before {
 details[open] summary::before { content: "\2212"; }
 
 .ing-details { overflow-x: auto; }
-.ing-table { width: 100%; min-width: 720px; border-collapse: collapse; font-size: 0.82rem; font-family: var(--mono); }
+
+/* The wide ingredient table must never push the page wider: cards are flex
+   items (min-width: auto by default) so they have to be allowed to shrink,
+   and the table itself scrolls inside .table-scroll on narrow screens. */
+.recipes-list > * { min-width: 0; }
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }
+
+/* Step-by-step instructions list */
+.instructions ol.steps { margin: 0; padding-left: 22px; display: grid; gap: 10px; }
+.instructions ol.steps li { line-height: 1.55; }
+.instructions p { margin: 0; white-space: pre-wrap; }
+.ing-table { width: 100%; min-width: 640px; border-collapse: collapse; font-size: 0.82rem; font-family: var(--mono); }
 .ing-table th {
   text-align: left;
   padding: 8px 10px;

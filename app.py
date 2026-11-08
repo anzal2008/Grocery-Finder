@@ -351,6 +351,15 @@ def find_stores(lat, lon, radius_m=20000):
     return best
 
 
+@app.after_request
+def _never_stale(resp):
+    # UI files change on every deploy: without this browsers serve a cached
+    # index.html that references old (also cached) asset versions, and every
+    # fix looks like "still not working" until a manual hard refresh.
+    resp.headers["Cache-Control"] = "no-cache"
+    return resp
+
+
 @app.get("/")
 def home():
     return send_from_directory("static", "index.html")
