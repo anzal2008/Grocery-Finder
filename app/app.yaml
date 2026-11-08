@@ -1,0 +1,13 @@
+command:
+  - python
+  - app.py
+
+env:
+  - name: WAREHOUSE_ID
+    value: "15935a9200964ebc"  # TODO: replace with the NEW account's Starter Warehouse ID
+# Re-enable these two lines once the secret is stored (notebook "Paste Your API Key"):
+#  - name: GEMINI_API_KEY
+#    value: "{{secrets/grocery-finder/gemini_api_key}}"
+
+user_api_scopes:
+  - sql
