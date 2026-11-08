@@ -270,6 +270,7 @@ def nominatim_nearby_stores(lat, lon, radius_m=20000):
                 address=address[:140], lat=elat, lon=elon, distanceKm=dist,
             ))
     out.sort(key=lambda s: s["distanceKm"])
+    out = merge_duplicate_stores(out)
     print("NOMINATIM_FALLBACK stores=%d" % len(out), flush=True)
     return out
 
@@ -303,7 +304,28 @@ def _parse_overpass_elements(lat, lon, elements, radius_m):
         ))
     stores = [s for s in stores if s["distanceKm"] <= radius_m / 1000.0 + 0.05]
     stores.sort(key=lambda s: s["distanceKm"])
-    return stores
+    return merge_duplicate_stores(stores)
+
+
+def merge_duplicate_stores(stores, max_gap_m=80):
+    """OpenStreetMap often maps one store twice (a point and a building
+    outline, or two slightly different names - e.g. Safeway at 2733 W
+    Broadway showing as both #2 and #3). Keep one entry per chain within
+    max_gap_m, preferring the entry that has a street address.
+    Input must be sorted by distance."""
+    kept = []
+    for s in stores:
+        twin = None
+        for k in kept:
+            if k["chain"] == s["chain"] and \
+                    haversine(k["lat"], k["lon"], s["lat"], s["lon"]) * 1000.0 < max_gap_m:
+                twin = k
+                break
+        if twin is None:
+            kept.append(s)
+        elif not twin.get("address") and s.get("address"):
+            twin.update(address=s["address"], name=s["name"] or twin["name"])
+    return kept
 
 
 def find_stores(lat, lon, radius_m=20000):

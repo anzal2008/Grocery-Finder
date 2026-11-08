@@ -3,46 +3,73 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Penny &amp; Parsley — beautiful meals, honest prices</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%BF%3C/text%3E%3C/svg%3E">
+<title>Forkcast — Tonight's cheapest dinner, forecast.</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%231F6F50'/%3E%3Crect x='15' y='12' width='6' height='22' rx='3' fill='%23EEF3EA'/%3E%3Crect x='24' y='16' width='6' height='18' rx='3' fill='%23EEF3EA'/%3E%3Crect x='33' y='20' width='6' height='14' rx='3' fill='%23EEF3EA'/%3E%3Crect x='42' y='24' width='6' height='10' rx='3' fill='%23E4572E'/%3E%3Crect x='15' y='30' width='33' height='8' rx='4' fill='%23EEF3EA'/%3E%3Crect x='28.5' y='36' width='6' height='18' rx='3' fill='%23EEF3EA'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Young+Serif&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/forkcast.css">
 <link rel="stylesheet" href="/static/L-account.css">
 </head>
 <body>
+<a class="skip-link" href="#postal">Skip to search</a>
 <header class="topbar">
-  <span class="wordmark"><span class="stamp" aria-hidden="true">P&amp;P</span>Penny &amp; Parsley</span>
-  <button type="button" id="account-open-btn" class="theme-btn" aria-haspopup="dialog">Sign in</button>
-  <button type="button" id="theme-btn" class="theme-btn" aria-label="Switch colour theme">Dark</button>
-  <button type="button" id="advanced-btn" class="theme-btn adv-btn" aria-label="Advanced settings">Advanced</button>
+  <span class="wordmark">
+    <svg class="logo" viewBox="0 0 64 64" width="34" height="34" role="img" aria-label="Forkcast logo">
+      <rect width="64" height="64" rx="18" fill="#1F6F50"/>
+      <rect x="15" y="12" width="6" height="22" rx="3" fill="#EEF3EA"/>
+      <rect x="24" y="16" width="6" height="18" rx="3" fill="#EEF3EA"/>
+      <rect x="33" y="20" width="6" height="14" rx="3" fill="#EEF3EA"/>
+      <rect x="42" y="24" width="6" height="10" rx="3" fill="#E4572E"/>
+      <rect x="15" y="30" width="33" height="8" rx="4" fill="#EEF3EA"/>
+      <rect x="28.5" y="36" width="6" height="18" rx="3" fill="#EEF3EA"/>
+    </svg>
+    <span class="wordmark-text">Forkcast</span>
+  </span>
+  <span class="topbar-actions">
+    <button type="button" id="account-open-btn" class="topbar-btn" aria-haspopup="dialog">Account</button>
+    <button type="button" id="advanced-btn" class="topbar-btn adv-btn" aria-label="Advanced settings" aria-expanded="false">Settings</button>
+    <button type="button" id="theme-btn" class="topbar-btn icon-btn" aria-label="Switch to dark theme"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 14.2A8.4 8.4 0 1 1 9.8 3.5a6.8 6.8 0 0 0 10.7 10.7z"/></svg></button>
+  </span>
 </header>
 
 <main>
   <section class="hero">
-    <div>
-      <p class="kicker">Canada &middot; 7 chains tracked &middot; 5 with live prices</p>
-      <h1>What's the best meal your money can make near you?</h1>
-      <p class="lead">Enter a postal code or use your location. We map your nearest stores and
-        price home-cooked recipes with real Canadian prices - what the meal costs tonight, and
+    <svg class="contours" viewBox="0 0 640 640" fill="none" aria-hidden="true">
+      <circle cx="460" cy="320" r="40" class="ring"/>
+      <circle cx="460" cy="320" r="80" class="ring"/>
+      <circle cx="460" cy="320" r="120" class="ring thick"/>
+      <circle cx="460" cy="320" r="160" class="ring"/>
+      <circle cx="460" cy="320" r="200" class="ring"/>
+      <circle cx="460" cy="320" r="240" class="ring thick"/>
+      <circle cx="460" cy="320" r="280" class="ring"/>
+      <circle cx="460" cy="320" r="320" class="ring"/>
+      <circle cx="460" cy="320" r="360" class="ring thick"/>
+      <circle cx="460" cy="320" r="400" class="ring"/>
+    </svg>
+    <div class="hero-copy">
+      <p class="kicker">Live prices from 5 Canadian grocery chains</p>
+      <h1>Tonight's cheapest dinner, forecast.</h1>
+      <p class="lead">Enter a postal code or use your location. Forkcast maps your nearest stores and
+        prices home-cooked recipes with real Canadian prices - what the meal costs tonight, and
         what the full packages cost on the shelf.</p>
     </div>
   </section>
 
-  <form id="postal-form" class="tag-card" autocomplete="postal-code" novalidate>
-    <span class="punch" aria-hidden="true"></span>
-
-    <div class="mode" role="radiogroup" aria-label="Shopping trip">
-      <label><input type="radio" name="shopmode" value="single" checked><span>One store trip</span></label>
-      <label><input type="radio" name="shopmode" value="multi"><span>Cheapest of 3 stores</span></label>
-    </div>
+  <form id="postal-form" class="search-card" autocomplete="postal-code" novalidate>
+    <fieldset class="mode-fieldset">
+      <legend>How do you want to shop?</legend>
+      <div class="mode" role="radiogroup" aria-label="Shopping trip">
+        <label><input type="radio" name="shopmode" value="single" checked><span>One-store trip</span></label>
+        <label><input type="radio" name="shopmode" value="multi"><span>Cheapest of 3 stores</span></label>
+      </div>
+    </fieldset>
 
     <div class="search-row">
-      <label for="postal" class="visually-hidden">Postal code</label>
-      <input id="postal" type="text" inputmode="text" placeholder="V6K 1P2" spellcheck="false" maxlength="7" aria-label="Canadian postal code">
-      <button type="submit" id="go">Find meals</button>
+      <label for="postal" class="postal-label">Postal code</label>
+      <input id="postal" type="text" inputmode="text" placeholder="V6T 1Z4" spellcheck="false" maxlength="7" aria-label="Canadian postal code">
+      <button type="submit" id="go">Forecast my dinner</button>
     </div>
 
     <div class="tag-bottom">
@@ -61,38 +88,49 @@
   </form>
 
   <section id="results" class="results" hidden>
-    <div class="receipt-wrap">
-      <div class="receipt">
-        <p class="receipt-top">PENNY &amp; PARSLEY</p>
-        <p id="location-info" class="receipt-meta"></p>
-        <h2 tabindex="-1">Stores near you</h2>
-        <p class="receipt-meta">Nearest first &middot; tap a store to find it on the map</p>
-        <hr>
-        <ol id="store-list" class="store-list"></ol>
-        <hr>
-        <dl class="totals">
-          <div><dt>Stores found</dt><dd id="total-count">0</dd></div>
-          <div><dt>Priced chains nearby</dt><dd id="total-nearest">-</dd></div>
-        </dl>
-        <p class="receipt-thanks">Chains without live prices are marked "no price data"</p>
+    <div class="results-cols">
+      <div class="col-left">
+        <div class="map-card">
+          <div id="map" class="map" aria-label="Map of stores near you"></div>
+          <button type="button" id="map-centre-btn" class="map-centre" aria-label="Centre the map on you" title="Centre the map on you"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/></svg></button>
+          <div class="map-legend" aria-hidden="true">
+            <span class="legend-you">You</span>
+            <span class="legend-live">Live prices</span>
+            <span class="legend-noprice">No price data</span>
+          </div>
+          <p id="map-fallback" class="muted" hidden>The map couldn't load. Check your internet connection.</p>
+        </div>
+        <div class="stores-card">
+          <p id="location-info" class="location-info"></p>
+          <h2 tabindex="-1">Stores near you</h2>
+          <p class="stores-sub">Nearest first &middot; tap a store to find it on the map</p>
+          <ol id="store-list" class="store-list"></ol>
+          <dl class="totals">
+            <div><dt>Stores found</dt><dd id="total-count">0</dd></div>
+            <div><dt>Priced chains nearby</dt><dd id="total-nearest">-</dd></div>
+          </dl>
+        </div>
+      </div>
+
+      <div class="col-right">
+        <section id="recipes" class="recipes" hidden>
+          <div id="forecast-banner" class="forecast-banner" hidden></div>
+          <h2 id="recipes-heading">Recipes</h2>
+          <p id="recipes-meta" class="recipes-meta"></p>
+          <div class="recipes-controls">
+            <div class="stepper" role="group" aria-label="Servings">
+              <span class="stepper-label">Servings</span>
+              <button type="button" id="servings-minus" class="stepper-btn" aria-label="One fewer serving">&minus;</button>
+              <output id="servings-value" class="servings-value" for="servings">1</output>
+              <button type="button" id="servings-plus" class="stepper-btn" aria-label="One more serving">+</button>
+              <input type="range" id="servings" name="servings" min="1" max="12" step="1" value="1" aria-label="Number of servings" hidden>
+            </div>
+            <button type="button" id="filters-btn" class="pill-btn" aria-expanded="false">Diet &amp; price filters</button>
+          </div>
+          <div id="recipes-list" class="recipes-list" aria-live="polite"></div>
+        </section>
       </div>
     </div>
-    <div class="results-map">
-      <div id="map" class="map" aria-label="Map of stores near you"></div>
-      <p id="map-fallback" class="muted" hidden>The map couldn't load. Check your internet connection.</p>
-    </div>
-  </section>
-
-  <section id="recipes" class="recipes" hidden>
-    <h2 id="recipes-heading">Recipes</h2>
-    <p id="recipes-meta" class="recipes-meta"></p>
-    <div class="recipes-controls">
-      <label class="recipes-servings" for="servings">Servings
-        <input type="range" id="servings" name="servings" min="1" max="12" step="1" value="1" aria-label="Number of servings">
-        <output id="servings-value" class="servings-value" for="servings">1</output>
-      </label>
-    </div>
-    <div id="recipes-list" class="recipes-list"></div>
   </section>
 
   <section id="advanced" class="advanced" hidden>
@@ -152,6 +190,7 @@
 
 <footer class="footer">
   <p>Prices are chain-level snapshots and may vary by store. Recipe amounts are converted to grams/mL with standard kitchen conversions and flagged as approximations.</p>
+  <p>Map data &copy; OpenStreetMap contributors.</p>
 </footer>
 
 <aside id="account-drawer" hidden role="dialog" aria-label="AI chef">

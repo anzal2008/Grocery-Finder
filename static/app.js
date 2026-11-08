@@ -17,8 +17,12 @@ const cad = (v) => (v == null ? "-" : "$" + Number(v).toFixed(2));
     && window.matchMedia("(prefers-color-scheme: dark)").matches;
   root.dataset.theme = saved || (prefersDark ? "dark" : "light");
   if (btn) {
+    const SUN = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.4"/><path d="M12 2.5v2.4M12 19.1v2.4M2.5 12h2.4M19.1 12h2.4M4.9 4.9l1.7 1.7M17.4 17.4l1.7 1.7M19.1 4.9l-1.7 1.7M6.6 17.4l-1.7 1.7"/></svg>';
+    const MOON = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 14.2A8.4 8.4 0 1 1 9.8 3.5a6.8 6.8 0 0 0 10.7 10.7z"/></svg>';
     const sync = () => {
-      btn.textContent = root.dataset.theme === "dark" ? "Light" : "Dark";
+      const dark = root.dataset.theme === "dark";
+      btn.innerHTML = dark ? SUN : MOON;
+      btn.setAttribute("aria-label", dark ? "Switch to light theme" : "Switch to dark theme");
     };
     sync();
     btn.addEventListener("click", () => {
@@ -85,20 +89,20 @@ function getImgKey() {
   return (localStorage.getItem("gf-img-key") || "").trim();
 }
 
-function addPhotoButton(card, r) {
+function addPhotoButton(btnParent, boxParent, r) {
   const row = document.createElement("div");
   row.className = "photo-row";
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = "photo-btn";
-  btn.textContent = "Take a photo of this dish";
+  btn.textContent = "Photo of this dish";
   btn.prepend(lineIcon(ICON_CAMERA));
   row.appendChild(btn);
-  card.appendChild(row);
+  btnParent.appendChild(row);
   const box = document.createElement("div");
   box.className = "photo-box";
   box.hidden = true;
-  card.appendChild(box);
+  boxParent.appendChild(box);
   btn.addEventListener("click", () => requestDishPhoto(btn, box, r));
 }
 
@@ -160,20 +164,21 @@ async function requestDishPhoto(btn, box, r) {
   }
 }
 
-function addChatBox(card, r) {
+function addChatBox(btnParent, boxParent, r) {
   const row = document.createElement("div");
   row.className = "chat-row";
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = "photo-btn chat-btn";
   btn.textContent = "Ask the kitchen helper";
+  btn.setAttribute("aria-expanded", "false");
   btn.prepend(lineIcon(ICON_CHAT));
   row.appendChild(btn);
-  card.appendChild(row);
+  btnParent.appendChild(row);
   const box = document.createElement("div");
   box.className = "chat-box";
   box.hidden = true;
-  card.appendChild(box);
+  boxParent.appendChild(box);
   const ctx = {
     title: r.title,
     ingredients: (r.items || []).map((it) => (it.measure ? it.measure + " " + it.name : it.name)),
@@ -183,6 +188,7 @@ function addChatBox(card, r) {
   let built = false;
   btn.addEventListener("click", () => {
     box.hidden = !box.hidden;
+    btn.setAttribute("aria-expanded", String(!box.hidden));
     if (!box.hidden && !built) {
       buildChat(box, history, ctx);
       built = true;
@@ -346,6 +352,49 @@ async function fetchJson(url) {
   return data;
 }
 
+function dedupeStores(stores, maxGapM = 80) {
+  const kept = [];
+  (stores || []).forEach((s) => {
+    const twin = kept.find((k) => k.chain === s.chain &&
+      12742 * Math.asin(Math.sqrt(
+        Math.sin((s.lat - k.lat) * Math.PI / 360) ** 2 +
+        Math.cos(k.lat * Math.PI / 180) * Math.cos(s.lat * Math.PI / 180) *
+        Math.sin((s.lon - k.lon) * Math.PI / 360) ** 2)) < maxGapM / 1000);
+    if (!twin) kept.push(s);
+    else if (!twin.address && s.address) { twin.address = s.address; twin.name = s.name || twin.name; }
+  });
+  return kept;
+}
+
+function shortAddress(s) {
+  const parts = String(s.address || "").split(",").map((p) => p.trim()).filter(Boolean);
+  const out = [];
+  for (const p of parts) {
+    if (out.length >= 3) break;
+    if (p.toLowerCase().indexOf(String(s.chainName).toLowerCase()) !== -1) continue;
+    out.push(p);
+  }
+  return out.join(", ");
+}
+
+function selectStore(i, opts) {
+  document.querySelectorAll("#store-list li[data-idx]").forEach((li) =>
+    li.classList.toggle("selected", Number(li.getAttribute("data-idx")) === i));
+  _storeMarkers.forEach((m, idx) => {
+    const p = m.getElement && m.getElement();
+    if (p) p.classList.toggle("pin-selected", idx === i);
+  });
+  const pin = _storeMarkers[i];
+  if (pin && _map) {
+    if (!(opts && opts.stay)) _map.panTo(pin.getLatLng());
+    if (!(opts && opts.silent)) pin.openPopup();
+  }
+  if (opts && opts.scroll) {
+    const li = document.querySelector("#store-list li[data-idx='" + i + "']");
+    if (li) li.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+}
+
 function renderStores(data) {
   el("location-info").textContent = data.display
     ? "Showing results near " + data.display
@@ -365,26 +414,23 @@ function renderStores(data) {
     }
   });
   el("total-nearest").textContent = pricedChains.slice(0, 3).join(" / ") || "-";
-  list.innerHTML = data.stores.map((s, i) =>
-    "<li data-idx='" + i + "'>" +
-      "<span class='store-num'>" + (i + 1) + "</span>" +
-      "<span class='store-line'>" +
-        "<span class='store-name'>" + esc(s.chainName) +
-          (s.priced === false ? " <i class='no-price'>no price data</i>" : "") + "</span>" +
-        "<span class='leader'></span>" +
-        "<span class='store-km'>" + Number(s.distanceKm).toFixed(1) + " km</span>" +
-      "</span>" +
-      "<span class='store-address'>" + esc(s.name) +
-        (s.address ? " \u00b7 " + esc(s.address) : "") + "</span>" +
-    "</li>"
-  ).join("");
-  list.querySelectorAll("li[data-idx]").forEach((li) => {
-    li.addEventListener("click", () => {
-      const m = _storeMarkers[Number(li.getAttribute("data-idx"))];
-      if (m && _map) {
-        _map.panTo(m.getLatLng());
-        m.openPopup();
-      }
+  list.innerHTML = data.stores.map((s, i) => {
+    const addr = shortAddress(s) || esc(s.name);
+    return "<li data-idx='" + i + "'>" +
+      "<button type='button' class='store-row" + (s.priced === false ? " unpriced" : "") + "'>" +
+        "<span class='store-num'>" + (i + 1) + "</span>" +
+        "<span class='store-line'>" +
+          "<span class='store-name'>" + esc(s.chainName) + "</span>" +
+          "<span class='store-chip'>" + (s.priced === false ? "No price data" : "Live prices") + "</span>" +
+          "<span class='store-km'>" + Number(s.distanceKm).toFixed(1) + " km</span>" +
+        "</span>" +
+        "<span class='store-address'>" + addr + "</span>" +
+      "</button>" +
+    "</li>";
+  }).join("");
+  list.querySelectorAll("li[data-idx] button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      selectStore(Number(btn.closest("li").getAttribute("data-idx")));
     });
   });
 }
@@ -393,6 +439,17 @@ let _map = null;
 let _storeLayer = null;
 let _userMarker = null;
 let _storeMarkers = [];
+let _lastLoc = null;
+
+function fitToNearest(loc, n) {
+  const pts = [[loc.lat, loc.lon]]
+    .concat((loc.stores || []).slice(0, n || 6).map((s) => [s.lat, s.lon]));
+  if (pts.length > 1) {
+    _map.fitBounds(L.latLngBounds(pts).pad(0.2), { maxZoom: 15 });
+  } else {
+    _map.setView([loc.lat, loc.lon], 13);
+  }
+}
 
 function renderMap(loc) {
   const div = el("map");
@@ -410,20 +467,24 @@ function renderMap(loc) {
   }
   if (_storeLayer) _storeLayer.remove();
   if (_userMarker) _userMarker.remove();
-  const user = L.circleMarker([loc.lat, loc.lon], {
-    radius: 8, color: "#c2410c", fillColor: "#c2410c", fillOpacity: 0.9, weight: 3,
+  const user = L.marker([loc.lat, loc.lon], {
+    icon: L.divIcon({
+      className: "pin-wrap",
+      html: "<div class='pin-you' aria-hidden='true'></div>",
+      iconSize: [18, 18], iconAnchor: [9, 9],
+    }),
+    interactive: false,
   });
-  _userMarker = user.addTo(_map).bindPopup("You are here");
+  _userMarker = user.addTo(_map);
   _storeLayer = L.layerGroup().addTo(_map);
   _storeMarkers = [];
-  const pts = [[loc.lat, loc.lon]];
   (loc.stores || []).forEach((s, i) => {
     const pin = L.divIcon({
       className: "pin-wrap",
       html: "<div class='pin-store" + (s.priced === false ? " unpriced" : "") + "'><b>" + (i + 1) + "</b></div>",
-      iconSize: [28, 28],
-      iconAnchor: [14, 28],
-      popupAnchor: [0, -26],
+      iconSize: [32, 32],
+      iconAnchor: [16, 36],
+      popupAnchor: [0, -30],
     });
     const m = L.marker([s.lat, s.lon], { icon: pin, title: s.name })
       .addTo(_storeLayer)
@@ -432,21 +493,16 @@ function renderMap(loc) {
         esc(s.name) + (s.address ? "<br>" + esc(s.address) : "") + "<br>" +
         Number(s.distanceKm).toFixed(1) + " km away"
       );
+    m.on("click", () => selectStore(i, { scroll: true, silent: true }));
     _storeMarkers.push(m);
-    pts.push([s.lat, s.lon]);
   });
   // Measure the container BEFORE fitting bounds: if the map was created
   // or re-laid-out while hidden, fitBounds would compute zoom from a 0x0
   // container and zoom out over the whole region.
   _map.invalidateSize();
-  if (pts.length > 1) {
-    // Frame the user plus the nearest handful of stores only, with a zoom cap,
-    // so a 20 km result set doesn't zoom out to the whole city.
-    const near = pts.slice(0, 7);
-    _map.fitBounds(L.latLngBounds(near).pad(0.2), { maxZoom: 15 });
-  } else {
-    _map.setView([loc.lat, loc.lon], 13);
-  }
+  // Frame the user plus the nearest handful of stores only, with a zoom cap,
+  // so a 20 km result set doesn't zoom out to the whole city.
+  fitToNearest(loc, 6);
 }
 
 // Thin line-art icons (1.5px stroke) - one consistent custom set, no icon fonts.
@@ -454,6 +510,8 @@ const ICON_CAMERA = '<path d="M4.5 8h3.2l1.8-2.6h5l1.8 2.6h3.2v11h-15z"/><circle
 const ICON_CHAT = '<path d="M20.5 11.7a8.1 8.1 0 0 1-8.2 8c-1.4 0-2.8-.3-4-1L3.5 20l1.2-4.6a8.1 8.1 0 1 1 15.8-3.7z"/>';
 const ICON_PIN = '<path d="M12 21c-4.4-3.8-6.6-7.2-6.6-10.2a6.6 6.6 0 0 1 13.2 0C18.6 13.8 16.4 17.2 12 21z"/><circle cx="12" cy="10.4" r="2.4"/>';
 const ICON_SEARCH = '<circle cx="11" cy="11" r="6.4"/><path d="M20 20l-4.4-4.4"/>';
+const ICON_GEAR = '<circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.04.04a2 2 0 1 1-2.83 2.83l-.04-.04a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 8.9 19.3a1.7 1.7 0 0 0-1.88.34l-.04.04a2 2 0 1 1-2.83-2.83l.04-.04A1.7 1.7 0 0 0 4.7 15a1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.7 9a1.7 1.7 0 0 0-.34-1.88l-.04-.04a2 2 0 1 1 2.83-2.83l.04.04A1.7 1.7 0 0 0 9 4.7 1.7 1.7 0 0 0 10.03 3.14V3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 15 4.7a1.7 1.7 0 0 0 1.88-.34l.04-.04a2 2 0 1 1 2.83 2.83l-.04.04A1.7 1.7 0 0 0 19.3 9c.24.6.8 1 1.44 1.03H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1.03z"/>';
+const ICON_CROSSHAIR = '<circle cx="12" cy="12" r="7"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/><circle cx="12" cy="12" r="1.6"/>';
 
 function lineIcon(paths, size) {
   const NS = "http://www.w3.org/2000/svg";
@@ -491,25 +549,29 @@ function curatedCategory(c) {
 function recipeCard(r, mode, rank) {
   const card = document.createElement("article");
   card.className = "recipe-card" + (rank === 0 ? " rank-1" : "");
-  const head = document.createElement("header");
-  head.className = "card-head";
+  const top = document.createElement("div");
+  top.className = "card-top";
+  const left = document.createElement("div");
+  left.className = "card-top-left";
+  const headRow = document.createElement("div");
+  headRow.className = "card-head-row";
   if (typeof rank === "number") {
     const rankEl = document.createElement("span");
-    rankEl.className = "rank" + (rank === 0 ? " best" : "");
-    rankEl.textContent = "#" + (rank + 1);
-    head.appendChild(rankEl);
+    rankEl.className = "rank-pill" + (rank === 0 ? " best" : "");
+    rankEl.textContent = rank === 0 ? "#1 cheapest" : "#" + (rank + 1);
+    headRow.appendChild(rankEl);
   }
   const title = document.createElement("h3");
   title.textContent = r.title;
-  head.appendChild(title);
-  card.appendChild(head);
+  headRow.appendChild(title);
+  left.appendChild(headRow);
 
   const badges = document.createElement("div");
   badges.className = "badges";
   if (mode === "multi" && r.singleStoreMealCostCad != null
       && r.mealCostCad != null && r.singleStoreMealCostCad > r.mealCostCad + 0.005) {
     const b = document.createElement("span");
-    b.className = "badge save";
+    b.className = "tag-pill save";
     const save = (r.singleStoreMealCostCad - r.mealCostCad);
     b.textContent = "Save " + cad(save) + " by mixing stores";
     b.title = "Buying each item at the cheapest of your nearest stores instead of everything at "
@@ -518,24 +580,34 @@ function recipeCard(r, mode, rank) {
   }
   if (r.category) {
     const b = document.createElement("span");
-    b.className = "badge";
+    b.className = "tag-pill";
     b.textContent = curatedCategory(r.category);
     badges.appendChild(b);
   }
   if (r.area) {
     const b = document.createElement("span");
-    b.className = "badge area";
+    b.className = "tag-pill dashed";
     b.textContent = r.area;
     badges.appendChild(b);
   }
   if (r.untested) {
     const b = document.createElement("span");
-    b.className = "badge untested";
+    b.className = "tag-pill dashed untested";
     b.textContent = "Untested";
     b.title = "Suggested to match your filters; priced at your stores but not from the curated collection.";
     badges.appendChild(b);
   }
-  card.appendChild(badges);
+  left.appendChild(badges);
+  top.appendChild(left);
+
+  const cost = document.createElement("div");
+  cost.className = "card-cost";
+  cost.innerHTML =
+    "<strong class='cost-value'>" + cad(r.mealCostCad) + "</strong>" +
+    "<span class='cost-sub'>to make " + r.servings + " serving" + (r.servings > 1 ? "s" : "") + "</span>" +
+    "<span class='cost-pkg'>" + cad(r.fullPackageTotalCad) + " for all full packages</span>";
+  top.appendChild(cost);
+  card.appendChild(top);
 
   if (r.recipeServings) {
     const snote = document.createElement("p");
@@ -546,32 +618,6 @@ function recipeCard(r, mode, rank) {
       ". Costs shown are for " + r.servings + " serving" + (r.servings > 1 ? "s" : "") + ".";
     card.appendChild(snote);
   }
-
-  const totals = document.createElement("div");
-  totals.className = "totals";
-  const meal = document.createElement("div");
-  meal.className = "total meal";
-  const mLabel = document.createElement("span");
-  mLabel.className = "total-label";
-  mLabel.textContent = "Cost to make the meal";
-  const mVal = document.createElement("strong");
-  mVal.className = "total-value";
-  mVal.textContent = cad(r.mealCostCad);
-  meal.appendChild(mLabel);
-  meal.appendChild(mVal);
-  totals.appendChild(meal);
-  const pkg = document.createElement("div");
-  pkg.className = "total pkg";
-  const pLabel = document.createElement("span");
-  pLabel.className = "total-label";
-  pLabel.textContent = "Cost of all full packages";
-  const pVal = document.createElement("strong");
-  pVal.className = "total-value";
-  pVal.textContent = cad(r.fullPackageTotalCad);
-  pkg.appendChild(pLabel);
-  pkg.appendChild(pVal);
-  totals.appendChild(pkg);
-  card.appendChild(totals);
 
   if (mode === "single" && r.missingFromPrimary && r.missingFromPrimary.length) {
     const note = document.createElement("p");
@@ -589,9 +635,13 @@ function recipeCard(r, mode, rank) {
   wrap.appendChild(buildIngTable(r));
   card.appendChild(wrap);
   addInstructions(card, r);
-  addSourceLink(card, r);
-  addPhotoButton(card, r);
-  addChatBox(card, r);
+
+  const actions = document.createElement("div");
+  actions.className = "card-actions";
+  addChatBox(actions, card, r);
+  addPhotoButton(actions, card, r);
+  addSourceLink(actions, r);
+  card.appendChild(actions);
   return card;
 }
 
@@ -656,6 +706,24 @@ let lastChains = [];
 let lastPrimary = "";
 let lastRecipes = null; // cached /api/recipes response so mode toggles don't refetch
 
+function updateForecastBanner(mode) {
+  const banner = el("forecast-banner");
+  if (!banner || !lastRecipes) return;
+  const list = mode === "single"
+    ? underPriceCap(lastRecipes.single_store)
+    : underPriceCap(lastRecipes.cheapest_overall);
+  if (!list || !list.length) { banner.hidden = true; return; }
+  const r = list[0];
+  const tail = mode === "multi"
+    ? ", mixing your " + advanced.stores + " nearest stores."
+    : ", all from " + (lastPrimary || "your nearest store") + ".";
+  banner.hidden = false;
+  banner.innerHTML =
+    "<p>Cheapest dinner near you is <b>" + esc(r.title) + "</b>" + tail + "</p>" +
+    "<p class='forecast-cost'><strong>" + cad(r.mealCostCad) + "</strong>" +
+    "<span>for " + r.servings + " serving" + (r.servings > 1 ? "s" : "") + "</span></p>";
+}
+
 function renderRecipesFromCache() {
   if (!lastRecipes) return;
   const mode = getMode();
@@ -672,6 +740,7 @@ function renderRecipesFromCache() {
   el("recipes-meta").textContent += lastRecipes.untestedIncluded
     ? " Recipes labelled Untested were suggested to match your filters and priced at your stores."
     : "";
+  updateForecastBanner(mode);
   renderList(mode === "single"
     ? underPriceCap(lastRecipes.single_store)
     : underPriceCap(lastRecipes.cheapest_overall), mode);
@@ -680,6 +749,18 @@ function renderRecipesFromCache() {
 
 async function renderRecipes(chains, servings) {
   setLoading(true, "Pricing recipes at " + chains.join(", ") + "...");
+  // shimmering placeholders while the price engine runs
+  const listEl = el("recipes-list");
+  if (listEl) {
+    el("recipes").hidden = false;
+    listEl.textContent = "";
+    for (let i = 0; i < 3; i++) {
+      const d = document.createElement("div");
+      d.className = "recipe-card shimmer-card";
+      d.setAttribute("aria-hidden", "true");
+      listEl.appendChild(d);
+    }
+  }
   try {
     lastRecipes = await fetchJson("/api/recipes?chains=" + chains.join(",") +
       "&servings=" + encodeURIComponent(servings) +
@@ -691,6 +772,8 @@ async function renderRecipes(chains, servings) {
 }
 
 async function afterLocate(loc) {
+  loc.stores = dedupeStores(loc.stores);
+  _lastLoc = loc;
   renderStores(loc);
   if (!loc.chains || !loc.chains.length) {
     setLoading(false);
@@ -703,6 +786,7 @@ async function afterLocate(loc) {
   // #map lives inside #results: reveal it BEFORE rendering so Leaflet can
   // measure the container; otherwise fitBounds zooms from a 0x0 box.
   el("results").hidden = false;
+  document.body.classList.add("has-results");
   renderMap(loc);
   await renderRecipes(lastChains, getServings());
 }
@@ -749,24 +833,36 @@ el("postal-form").addEventListener("submit", async (e) => {
   const label = el("servings-value");
   if (!slider) return;
   const syncLabel = () => {
-    if (!label) return;
-    label.textContent = Number(slider.value) >= Number(slider.max)
-      ? slider.value + "+"
-      : slider.value;
+    if (label) label.textContent = slider.value;
   };
   syncLabel();
+  // stepper buttons + hidden range: the range stays the source of truth;
+  // rapid taps collapse into ONE refetch (450 ms after the last click).
+  let _pending = null;
+  const refetch = () => {
+    if (_pending) clearTimeout(_pending);
+    _pending = setTimeout(async () => {
+      _pending = null;
+      if (!lastChains.length) return;
+      el("results").hidden = false;
+      try {
+        await renderRecipes(lastChains, getServings());
+      } catch (err) {
+        showError(err.message || "Something went wrong.");
+      }
+    }, 450);
+  };
+  const step = (d) => {
+    slider.value = String(Math.min(Number(slider.max), Math.max(Number(slider.min), Number(slider.value) + d)));
+    syncLabel();
+    refetch();
+  };
+  const minus = el("servings-minus");
+  const plus = el("servings-plus");
+  if (minus) minus.addEventListener("click", () => step(-1));
+  if (plus) plus.addEventListener("click", () => step(1));
   slider.addEventListener("input", syncLabel);
-  slider.addEventListener("change", async () => {
-    if (!lastChains.length) {
-      return;
-    }
-    el("results").hidden = false;
-    try {
-      await renderRecipes(lastChains, getServings());
-    } catch (err) {
-      showError(err.message || "Something went wrong.");
-    }
-  });
+  slider.addEventListener("change", refetch);
 })();
 
 (function initPriceSlider() {
@@ -846,9 +942,15 @@ el("postal-form").addEventListener("submit", async (e) => {
   const openAdvanced = (open) => {
     document.body.classList.toggle("adv-open", open);
     sec.hidden = !open;
-    btn.textContent = open ? "Save" : "Advanced";
+    btn.textContent = open ? "Done" : "Settings";
+    btn.setAttribute("aria-expanded", String(open));
+    const fb = el("filters-btn");
+    if (fb) fb.setAttribute("aria-expanded", String(open));
   };
   btn.addEventListener("click", () =>
+    openAdvanced(!document.body.classList.contains("adv-open")));
+  const filterBtn = el("filters-btn");
+  if (filterBtn) filterBtn.addEventListener("click", () =>
     openAdvanced(!document.body.classList.contains("adv-open")));
   const back = el("adv-back");
   if (back) back.addEventListener("click", () => {
@@ -866,6 +968,13 @@ el("postal-form").addEventListener("submit", async (e) => {
   if (pin && !pin.querySelector("svg")) pin.prepend(lineIcon(ICON_PIN, 15));
   const submit = document.querySelector("#postal-form button[type='submit']");
   if (submit && !submit.querySelector("svg")) submit.prepend(lineIcon(ICON_SEARCH, 15));
+  const gear = el("advanced-btn");
+  if (gear && !gear.querySelector("svg")) gear.prepend(lineIcon(ICON_GEAR, 16));
+  const centre = el("map-centre-btn");
+  if (centre && !centre.querySelector("svg")) centre.appendChild(lineIcon(ICON_CROSSHAIR, 18));
+  if (centre) centre.addEventListener("click", () => {
+    if (_lastLoc && _map) fitToNearest(_lastLoc, 6);
+  });
 })();
 
 document.querySelectorAll("input[name='shopmode']").forEach((radio) => {
@@ -916,15 +1025,15 @@ function addInstructions(card, r) {
   card.appendChild(inst);
 }
 
-function addSourceLink(card, r) {
+function addSourceLink(parent, r) {
   if (!r.sourceUrl) return;
   const link = document.createElement("a");
   link.className = "source-link";
   link.href = r.sourceUrl;
   link.target = "_blank";
   link.rel = "noopener";
-  link.textContent = "Original recipe";
-  card.appendChild(link);
+  link.textContent = "Original recipe \u2197";
+  parent.appendChild(link);
 }
 
 function buildIngTable(r) {
