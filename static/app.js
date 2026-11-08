@@ -687,7 +687,26 @@ function underPriceCap(list) {
 function renderList(recipes, mode) {
   const container = el("recipes-list");
   container.textContent = "";
-  if (!recipes || !recipes.length) {
+  let list = recipes;
+  let cardMode = mode;
+  // the active column came up empty but the other has meals? show those
+  // instead of a bare "no results" - with a note explaining the switch.
+  if ((!list || !list.length) && lastRecipes) {
+    const other = (mode === "single")
+      ? underPriceCap(lastRecipes.cheapest_overall)
+      : underPriceCap(lastRecipes.single_store);
+    if (other && other.length) {
+      list = other;
+      cardMode = (mode === "single") ? "multi" : "single";
+      const note = document.createElement("p");
+      note.className = "muted";
+      note.textContent = (mode === "single")
+        ? "Nothing met these filters at your single nearest store - showing the cheapest options across your nearby stores:"
+        : "Showing the meals your nearest store alone can cover:";
+      container.appendChild(note);
+    }
+  }
+  if (!list || !list.length) {
     const p = document.createElement("p");
     p.className = "muted";
     p.textContent = mode === "single"
@@ -699,7 +718,14 @@ function renderList(recipes, mode) {
     container.appendChild(p);
     return;
   }
-  recipes.forEach((r, i) => container.appendChild(recipeCard(r, mode, i)));
+  list.forEach((r, i) => {
+    try {
+      container.appendChild(recipeCard(r, cardMode, i));
+    } catch (e) {
+      // one malformed recipe should never blank out the whole list
+      console.warn("Skipping a recipe that failed to render", e);
+    }
+  });
 }
 
 let lastChains = [];
@@ -924,7 +950,8 @@ function syncDietBoxes() {
       advanced.servings = servingsInput.value.trim();
       saveAdvanced();
       if (lastChains.length) {
-        renderRecipes(lastChains, getServings()).catch(() => {});
+        renderRecipes(lastChains, getServings())
+          .catch((err) => showError(err.message || "Something went wrong."));
       }
     });
   }
@@ -958,7 +985,8 @@ function syncDietBoxes() {
       syncDietBoxes();
       // apply the dietary filters right away when results are on screen
       if (lastChains.length) {
-        renderRecipes(lastChains, getServings()).catch(() => {});
+        renderRecipes(lastChains, getServings())
+          .catch((err) => showError(err.message || "Something went wrong."));
       }
     });
   });
@@ -1002,7 +1030,8 @@ function syncDietBoxes() {
         saveAdvanced();
         syncDietBoxes();
         if (lastChains.length) {
-          renderRecipes(lastChains, getServings()).catch(() => {});
+          renderRecipes(lastChains, getServings())
+          .catch((err) => showError(err.message || "Something went wrong."));
         }
       });
     });
@@ -1084,8 +1113,8 @@ el("use-location").addEventListener("click", () => {
 // and "Preheat to 350. " never count as markers. Markers only define steps
 // when their numbers climb 1,2,3... from the start; any other numbering is
 // prose, not steps.
-const _STEP_LINE = /^(?:step\s+)?(\d{1,2})\s*[.)\]:]+\s*(?!\d)/i;
-const _STEP_MID = /(?:^|\s)(?:step\s+)?(\d{1,2})\s*[.)\]:]+\s*(?!\d)/gi;
+const _STEP_LINE = /^(?:steps?\s*)?[\(\[]?\s*(\d{1,2})\s*[.)\]:\-]+\s*(?!\d)/i;
+const _STEP_MID = /(?:^|\s)(?:steps?\s*)?[\(\[]?\s*(\d{1,2})\s*[.)\]:\-]+\s*(?!\d)/gi;
 
 function _packedSplit(one) {
   // one line packing several numbered steps -> array of steps, or null
@@ -1114,12 +1143,29 @@ function _packedSplit(one) {
 function _stripMarker(s) {
   // the <ol> numbers steps itself: strip leading markers (repeatedly - some
   // sources double them up), stray bullets, and a bare "Steps:" header line.
+  // Recognises "1." "1)" "(1)" "1 -" "Step 1:" "Steps 1:" and combinations,
+  // while "1.5 cups" and "350 degrees" are never treated as markers.
   let out = String(s);
-  const re = /^\s*(?:step\s+\d{1,2}\s*[.)\]:]+\s*|\d{1,2}\s*[.)\]:]+\s*|[-\u2022\u00b7]\s*)/i;
-  while (re.test(out)) {
-    out = out.replace(re, "");
+  const re = /^\s*(?:steps?\s+\d{1,2}\s*(?:[.)\]:\-]+\s*(?!\d)|\s+))|[\(\[]?\s*\d{1,2}\s*[.)\]:\-]+(?!\d)|[-\u2022\u00b7]+\s*/i;
+  for (;;) {
+    const m = out.match(re);
+    if (!m || !m[0].trim()) break;
+    out = out.slice(m[0].length);
   }
   return out.trim();
+}
+
+function _dedupeSteps(arr) {
+  // some sources list every step twice: drop exact repeats, and if the whole
+  // list is a doubled copy of itself, keep one copy only.
+  let a = arr.filter((s, i) => i === 0 || s !== arr[i - 1]);
+  const h = a.length / 2;
+  if (h >= 1 && Number.isInteger(h)) {
+    let same = true;
+    for (let i = 0; i < h; i++) { if (a[i] !== a[h + i]) { same = false; break; } }
+    if (same) a = a.slice(0, h);
+  }
+  return a;
 }
 
 function splitSteps(text) {
@@ -1130,7 +1176,7 @@ function splitSteps(text) {
   if (lines.length < 2) {
     // single blob: break it on strict numbered markers if any
     const packed = _packedSplit(lines[0] || "");
-    return (packed || lines).map(_stripMarker).filter(Boolean);
+    return _dedupeSteps((packed || lines).map(_stripMarker).filter(Boolean));
   }
   // multi-line: lines starting with markers that climb 1,2,3... are steps
   const marks = lines.map((l) => l.match(_STEP_LINE));
@@ -1146,8 +1192,8 @@ function splitSteps(text) {
       }
     });
     if (ok) {
-      return lines.map((l, i) => (marks[i] ? l.slice(marks[i][0].length) : l))
-        .map(_stripMarker).filter(Boolean);
+      return _dedupeSteps(lines.map((l, i) => (marks[i] ? l.slice(marks[i][0].length) : l))
+        .map(_stripMarker).filter(Boolean));
     }
   }
   // otherwise: some lines may still pack multiple steps - split each line
@@ -1156,7 +1202,7 @@ function splitSteps(text) {
     const packed = _packedSplit(l);
     out.push(...(packed || [l]));
   });
-  return out.map(_stripMarker).filter(Boolean);
+  return _dedupeSteps(out.map(_stripMarker).filter(Boolean));
 }
 
 function addInstructions(card, r) {
