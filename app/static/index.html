@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en-CA">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Penny &amp; Parsley — beautiful meals, honest prices</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%BF%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Young+Serif&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <span class="wordmark"><span class="stamp" aria-hidden="true">P&amp;P</span>Penny &amp; Parsley</span>
+  <button type="button" id="theme-btn" class="theme-btn" aria-label="Switch colour theme">Dark</button>
+  <button type="button" id="advanced-btn" class="theme-btn adv-btn" aria-label="Advanced settings">Advanced</button>
+</header>
+
+<main>
+  <section class="hero">
+    <div>
+      <p class="kicker">Canada &middot; 9 chains tracked &middot; 5 with live prices</p>
+      <h1>What's the best meal your money can make near you?</h1>
+      <p class="lead">Enter a postal code or use your location. We map your nearest stores and
+        price home-cooked recipes with real Canadian prices - what the meal costs tonight, and
+        what the full packages cost on the shelf.</p>
+    </div>
+  </section>
+
+  <form id="postal-form" class="tag-card" autocomplete="postal-code" novalidate>
+    <span class="punch" aria-hidden="true"></span>
+
+    <div class="mode" role="radiogroup" aria-label="Shopping trip">
+      <label><input type="radio" name="shopmode" value="single" checked><span>One store trip</span></label>
+      <label><input type="radio" name="shopmode" value="multi"><span>Cheapest of 3 stores</span></label>
+    </div>
+
+    <div class="search-row">
+      <label for="postal" class="visually-hidden">Postal code</label>
+      <input id="postal" type="text" inputmode="text" placeholder="V6K 1P2" spellcheck="false" maxlength="7" aria-label="Canadian postal code">
+      <button type="submit" id="go">Find meals</button>
+    </div>
+
+    <div class="tag-bottom">
+      <button type="button" id="use-location" class="link-btn">Use my current location</button>
+    </div>
+
+    <div id="loading" class="progress" hidden>
+      <div class="progress-top">
+        <span id="loading-msg">Starting...</span>
+        <span id="progress-pct" class="progress-pct">0%</span>
+      </div>
+      <div class="progress-track"><div id="progress-fill" class="progress-fill"></div></div>
+      <p id="loading-tip" class="progress-tip"></p>
+    </div>
+    <p id="form-error" class="error" role="alert"></p>
+  </form>
+
+  <section id="results" class="results" hidden>
+    <div class="receipt-wrap">
+      <div class="receipt">
+        <p class="receipt-top">PENNY &amp; PARSLEY</p>
+        <p id="location-info" class="receipt-meta"></p>
+        <h2 tabindex="-1">Stores near you</h2>
+        <p class="receipt-meta">Nearest first &middot; tap a store to find it on the map</p>
+        <hr>
+        <ol id="store-list" class="store-list"></ol>
+        <hr>
+        <dl class="totals">
+          <div><dt>Stores found</dt><dd id="total-count">0</dd></div>
+          <div><dt>Priced chains nearby</dt><dd id="total-nearest">-</dd></div>
+        </dl>
+        <p class="receipt-thanks">Chains without live prices are marked "no price data"</p>
+      </div>
+    </div>
+    <div class="results-map">
+      <div id="map" class="map" aria-label="Map of stores near you"></div>
+      <p id="map-fallback" class="muted" hidden>The map couldn't load. Check your internet connection.</p>
+    </div>
+  </section>
+
+  <section id="recipes" class="recipes" hidden>
+    <h2 id="recipes-heading">Recipes</h2>
+    <p id="recipes-meta" class="recipes-meta"></p>
+    <div class="recipes-controls">
+      <label class="recipes-servings" for="servings">Servings
+        <input type="range" id="servings" name="servings" min="1" max="12" step="1" value="1" aria-label="Number of servings">
+        <output id="servings-value" class="servings-value" for="servings">1</output>
+      </label>
+    </div>
+    <div id="recipes-list" class="recipes-list"></div>
+  </section>
+
+  <section id="advanced" class="advanced" hidden>
+    <div class="adv-card">
+      <h2>Advanced settings</h2>
+      <p class="adv-note">Saved in this browser. Store radius and dietary filters re-run on your next search.</p>
+      <div class="adv-row">
+        <label class="adv-label" for="adv-servings">Exact servings
+          <span class="adv-hint">Decimals welcome (e.g. 1.5) - overrides the quick slider.</span>
+        </label>
+        <input id="adv-servings" type="number" step="0.25" min="0.25" max="20" placeholder="off" inputmode="decimal">
+      </div>
+      <div class="adv-row">
+        <label class="adv-label" for="adv-radius">Search radius
+          <span class="adv-hint">How far from you to look for stores, in 100 m steps.</span>
+        </label>
+        <div class="serving-slider">
+          <input type="range" id="adv-radius" min="0.5" max="50" step="0.1" value="20" aria-label="Search radius in kilometres">
+          <output id="adv-radius-value" class="servings-value" for="adv-radius">20.0 km</output>
+        </div>
+      </div>
+      <div class="adv-row">
+        <label class="adv-label" for="max-price">Max price per meal
+          <span class="adv-hint">Hide recipes whose meal cost passes this cap.</span>
+        </label>
+        <div class="serving-slider">
+          <input type="range" id="max-price" name="max-price" min="1" max="100" step="0.5" value="100" aria-label="Maximum dollars per meal">
+          <output id="max-price-value" class="servings-value" for="max-price">Any</output>
+        </div>
+      </div>
+      <div class="adv-row">
+        <label class="adv-label" for="adv-stores">Stores you're willing to visit
+          <span class="adv-hint">Recipes mix the cheapest of your nearest this-many stores.</span>
+        </label>
+        <div class="serving-slider">
+          <input type="range" id="adv-stores" min="1" max="3" step="1" value="3" aria-label="Number of stores willing to visit">
+          <output id="adv-stores-value" class="servings-value" for="adv-stores">3</output>
+        </div>
+      </div>
+      <div class="adv-row">
+        <span class="adv-label">Dietary needs
+          <span class="adv-hint">Approximate - based on recipe tags and ingredient names.</span>
+        </span>
+        <div class="adv-checks">
+          <label><input type="checkbox" id="diet-vegetarian"><span>Vegetarian</span></label>
+          <label><input type="checkbox" id="diet-vegan"><span>Vegan</span></label>
+          <label><input type="checkbox" id="diet-gluten"><span>Gluten-free</span></label>
+          <label><input type="checkbox" id="diet-dairy"><span>Dairy-free</span></label>
+        </div>
+      </div>
+      <div class="adv-actions">
+        <button type="button" id="adv-back" class="link-btn">Save settings</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <p>Prices are chain-level snapshots and may vary by store. Recipe amounts are converted to grams/mL with standard kitchen conversions and flagged as approximations.</p>
+</footer>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>
