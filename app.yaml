@@ -1,0 +1,19 @@
+command:
+  - python
+  - app.py
+
+env:
+  - name: WAREHOUSE_ID
+    value: "33b394acdaffafa2"  # Serverless Starter Warehouse (serverless compute enabled)
+  - name: GEMINI_API_KEY
+    valueFrom: gemini-secret
+
+resources:
+  - name: gemini-secret
+    type: secret
+    config:
+      secret_scope: grocery-finder
+      secret_key: gemini_api_key
+
+user_api_scopes:
+  - sql

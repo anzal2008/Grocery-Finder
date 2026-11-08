@@ -1,0 +1,4 @@
+flask
+requests
+databricks-sdk
+gunicorn
